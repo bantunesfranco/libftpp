@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/11/01 19:17:20 by bfranco       #+#    #+#                 */
-/*   Updated: 2024/11/01 22:54:25 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/24 20:31:29 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,13 +22,12 @@ class Data : public Singleton<Data>
 		std::string _b;
 	
 	public:
-		friend class Singleton;
-
 		Data(int a, std::string b) : _a(a), _b(b) {};
 		~Data() {};
 		
-		static void	instance() = delete;
-		void		print() {std::cout << "a: " << _a << " b: " << _b << std::endl;}
+		void	setInt(int n) {_a = n;};
+		void	setString(const std::string& str) {_b = str;};
+		void	print() {std::cout << "a: " << _a << " b: " << _b << std::endl;}
 };
 
 void assert(bool condition, const std::string& message) {
@@ -37,6 +36,8 @@ void assert(bool condition, const std::string& message) {
 
 int main()
 {
+	assert(Singleton<int>::instance() == nullptr, "Instance should not exist");
+
 	Data* data = Singleton<Data>::instance();
 	assert(data == nullptr, "Instance should not exist");
 
@@ -53,9 +54,17 @@ int main()
 
 	data = Singleton<Data>::instance();
 	Data* other = Singleton<Data>::instance();
+	Data* newData = Data::instance();
 
 	assert(data == other, "Adress should be equal");
+	assert(data == newData, "Adress should be equal");
+	assert(newData == other, "Adress should be equal");
 
 	data->print();
-	other->print();
-}
+	
+	other->setInt(42);
+	newData->setString("Hello from Codam");
+
+	data->print();
+
+} 

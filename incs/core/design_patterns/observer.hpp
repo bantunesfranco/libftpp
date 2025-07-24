@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/10/31 21:22:46 by bfranco       #+#    #+#                 */
-/*   Updated: 2024/11/01 11:45:11 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/24 19:16:43 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,19 +17,20 @@
 #include <functional>
 #include <set>
 
+using FunctionRef = std::reference_wrapper<const std::function<void()>>;
+
 template<typename TEvent>
 class Observer
 {
-private:
-		struct FunctionComparator {
-			bool operator()(const std::reference_wrapper<const std::function<void()>>& a,
-							const std::reference_wrapper<const std::function<void()>>& b) const {
-				return &a.get() < &b.get();
-			}
-		};
-
-		std::unordered_map<TEvent, std::set<std::reference_wrapper<const std::function<void()>>, FunctionComparator>>  _observables;
-
+	private:
+	struct FunctionComparator {
+		bool operator()(const FunctionRef& a, const FunctionRef& b) const {
+			return &a.get() < &b.get();
+		}
+	};
+	
+	std::unordered_map<TEvent, std::set<FunctionRef, FunctionComparator>>  _observables;
+	
 	public:
 		Observer() = default;
 		~Observer() = default;
@@ -37,8 +38,8 @@ private:
 		Observer& operator=(const Observer& other);
 
 		void subscribe(const TEvent& event, const std::function<void()>& lambda);
-		void notify(const TEvent& event);
-		std::unordered_map<TEvent, std::set<std::reference_wrapper<const std::function<void()>>, FunctionComparator>>  getObservables(void) const { return _observables; };
+		void notify(const TEvent& event); 
+		auto getObservables(void) const { return _observables; };
 };
 
 template<typename TEvent>

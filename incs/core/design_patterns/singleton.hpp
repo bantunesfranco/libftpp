@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/11/01 18:19:04 by bfranco       #+#    #+#                 */
-/*   Updated: 2024/11/01 22:45:48 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/24 19:25:57 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,7 +27,6 @@ class Singleton
 		virtual ~Singleton() = default;
 		Singleton(const Singleton& other) = delete;
 		Singleton& operator=(const Singleton& other) = delete;
-
 
 	public:
 		template<typename ... TArgs>
