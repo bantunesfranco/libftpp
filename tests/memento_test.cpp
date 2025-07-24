@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/10/30 20:43:26 by bfranco       #+#    #+#                 */
-/*   Updated: 2024/10/31 21:08:26 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/24 19:01:34 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -30,7 +30,7 @@ class Data : public Memento {
 			snapshot << a << b;
 		}
 
-		void _loadFromSnapshot(const Snapshot& snapshot) override {
+		void _loadFromSnapshot(Snapshot& snapshot) override {
 			snapshot >> b >> a;
 		}
 };

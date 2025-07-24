@@ -12,7 +12,8 @@ CXX= c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++23
 
 ifdef DEBUG
-CXXFLAGS += -g -fsanitize=address
+CXXFLAGS += -g 
+#-fsanitize=address
 else
 CXXFLAGS += -O3
 endif

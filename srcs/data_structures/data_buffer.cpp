@@ -6,13 +6,13 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/10/31 00:33:13 by bfranco       #+#    #+#                 */
-/*   Updated: 2024/10/31 21:19:41 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/24 18:01:21 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "core/data_structures.hpp"
 
-DataBuffer::DataBuffer(const DataBuffer& other) : _buffer(other.buffer) {}
+DataBuffer::DataBuffer(const DataBuffer& other) : _buffer(other._buffer) {}
 
 DataBuffer& DataBuffer::operator=(const DataBuffer& other)
 {

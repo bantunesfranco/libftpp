@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/10/30 19:59:39 by bfranco       #+#    #+#                 */
-/*   Updated: 2024/10/31 19:28:00 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/24 18:52:22 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,7 +23,8 @@ Snapshot	Memento::save()
 
 void	Memento::load(const Snapshot& state)
 {
-	_loadFromSnapshot(state);
+	Snapshot tmp = state;
+	_loadFromSnapshot(tmp);
 }
 
 Snapshot::Snapshot(const Snapshot& other)

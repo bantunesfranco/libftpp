@@ -2,11 +2,6 @@
 
 mkdir -p objs bin
 
-# Compile all source files to object files
-for file in ../srcs/*/*.cpp; do
-    g++ -c "$file" -I../incs -o "objs/$(basename "${file%.cpp}.o")" || { echo "Build failed: $file"; exit 1; }
-done
-
 # Compile all test files to object files
 for file in *.cpp; do
     g++ -c "$file" -I../incs -o "objs/$(basename "${file%.cpp}.o")" || { echo "Build failed: $file"; exit 1; }
@@ -16,8 +11,9 @@ done
 FAILED=0
 for testobj in objs/*_test.o; do
     exe="bin/$(basename "${testobj%.o}")"
-    g++ "$testobj" objs/*.o -o "$exe" || { echo "Link failed: $exe"; exit 1; }
-    if ! "$exe"; then
+    g++ "$testobj" -lftpp -L.. -o "$exe" || { echo "Link failed: $exe"; exit 1; }
+    "$exe"
+    if [[ $? != 0 ]]; then
         echo "Test failed: $exe"
 		FAILED=$(($FAILED + 1))
     fi
