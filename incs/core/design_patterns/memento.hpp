@@ -41,11 +41,11 @@ class Memento
 		~Memento() = default;
 		
 		Snapshot		save();
-		void			load(Snapshot& state);
+		void			load(const Snapshot& state);
 
 	protected:
 		virtual void	_saveToSnapshot(Snapshot& snapshot) = 0;
-		virtual void	_loadFromSnapshot(Snapshot& snapshot) = 0;
+		virtual void	_loadFromSnapshot(const Snapshot& snapshot) = 0;
 };
 
 template<typename T>

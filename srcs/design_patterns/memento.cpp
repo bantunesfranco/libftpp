@@ -21,7 +21,7 @@ Snapshot	Memento::save()
 	return snapshot;
 }
 
-void	Memento::load(Snapshot& state)
+void	Memento::load(const Snapshot& state)
 {
 	_loadFromSnapshot(state);
 }

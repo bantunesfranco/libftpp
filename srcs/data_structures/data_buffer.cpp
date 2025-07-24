@@ -12,11 +12,7 @@
 
 #include "core/data_structures.hpp"
 
-DataBuffer::DataBuffer(const DataBuffer& other)
-{
-	if (this != &other)
-		*this = other;
-}
+DataBuffer::DataBuffer(const DataBuffer& other) : _buffer(other.buffer) {}
 
 DataBuffer& DataBuffer::operator=(const DataBuffer& other)
 {

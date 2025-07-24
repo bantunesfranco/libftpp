@@ -30,11 +30,9 @@ class Data : public Memento {
 			snapshot << a << b;
 		}
 
-		void _loadFromSnapshot(Snapshot& snapshot) override {
+		void _loadFromSnapshot(const Snapshot& snapshot) override {
 			snapshot >> b >> a;
 		}
-		
-		friend class Memento;
 };
 
 void assert(bool condition, const std::string& message) {
