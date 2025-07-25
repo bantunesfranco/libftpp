@@ -52,9 +52,8 @@ re: fclean all
 debug:
 	@$(MAKE) re DEBUG=1
 
-test: $(NAME)
+test: debug
 	@echo "$(CYAN)Running tests...$(END)"
 	@bash -c "cd tests && ./run_tests.sh"
-	@rm -rf tests/objs tests/bin
 
 .PHONY: all clean fclean re debug
