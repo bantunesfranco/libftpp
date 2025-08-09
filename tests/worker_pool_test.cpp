@@ -1,21 +1,22 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        ::::::::            */
-/*   libftpp.hpp                                        :+:    :+:            */
+/*   worker_pool_test.cpp                               :+:    :+:            */
 /*                                                     +:+                    */
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
-/*   Created: 2024/10/26 20:30:25 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/30 11:09:09 by bfranco       ########   odam.nl         */
+/*   Created: 2025/07/28 16:45:28 by bfranco       #+#    #+#                 */
+/*   Updated: 2025/07/28 17:12:24 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef LIBFTPP_HPP
-#define LIBFTPP_HPP
+#include "libftpp.hpp"
 
-#include "core/data_structures.hpp"
-#include "core/design_patterns.hpp"
-#include "core/threading.hpp"
-#include "core/networking.hpp"
+int main()
+{
+	WorkerPool pool(5);
 
-#endif
+	pool.addJob("square", [&](){static int i = 0; ThreadSafeIOStream::threadSafeCout << i*i << std::endl; ++i;});
+
+	pool.removeTask("square");
+}

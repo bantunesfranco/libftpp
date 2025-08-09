@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/10/25 17:39:42 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/27 22:59:20 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/28 17:25:01 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -66,8 +66,7 @@ class Pool
 		void	resize(const size_t numberOfObjectStored);
 		void	release(size_t index);
 		size_t	size() const;
-		void	add(Object& obj);
-		
+		const std::vector<TType> getPool() const;
 };
 
 template<typename TType>
@@ -108,5 +107,7 @@ typename Pool<TType>::Object Pool<TType>::acquire(TArgs&&... p_args)
 template<typename TType>
 size_t Pool<TType>::size() const { return _poolSize; }
 
+template<typename TType>
+const std::vector<TType> Pool<TType>::getPool() const { return _pool; }
 
 #endif

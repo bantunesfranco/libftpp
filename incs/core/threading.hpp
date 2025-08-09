@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/25 14:05:10 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/27 11:14:00 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/30 12:29:53 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,27 +19,43 @@
 #include <condition_variable>
 #include "threading/thread_safe_queue.hpp"
 #include "threading/thread_safe_iostream.hpp"
+#include "threading/worker_pool.hpp"
 
-class Thread
-{
-	private:
-		bool _start;
-		std::function<void()> _functionToExecute;
-		std::mutex _mutex;
-		std::condition_variable _condition;
-		std::thread _thread;
+#include <thread>
+#include <functional>
+#include <string>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
 
-	public:
-		static thread_local std::string _name;	
-		static const std::string& getName();
-		
-		Thread(std::string name, std::function<void()> functToExecute);
-		~Thread();
-		Thread(const Thread&) = delete;
-		Thread(Thread&&) = delete;
+class Thread {
+private:
+    std::thread _thread;
+    std::function<void()> _functionToExecute;
+    std::string _name;
 
-		void start();
-		void stop();
+    std::mutex _startMutex;
+    std::condition_variable _startCondition;
+    std::atomic<bool> _started{false};
+    std::atomic<bool> _stopRequested{false};
+
+    void _threadEntry();
+
+    static thread_local std::string _threadName;
+
+public:
+    Thread(const std::string& name, std::function<void()> functToExecute);
+    ~Thread();
+    Thread(const Thread&) = delete;
+    Thread& operator=(const Thread&) = delete;
+    Thread(Thread&& other) noexcept;
+    Thread& operator=(Thread&& other) noexcept;
+
+    void start();
+    void stop();
+    const std::string& getName() const;
+
+    static const std::string& getCurrentThreadName();
 };
 
 #endif

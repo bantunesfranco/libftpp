@@ -6,57 +6,85 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/25 19:26:20 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/27 11:24:33 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/30 12:29:19 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "libftpp.hpp"
+#include "core/threading.hpp"
 
-thread_local std::string Thread::_name = "Main";
+thread_local std::string Thread::_threadName = "Main";
 
-Thread::Thread(std::string name, std::function<void()> functToExecute):
-	_start(false), _functionToExecute(functToExecute), _mutex(), _condition() {
-		_thread = std::thread([this, name]() {
-		_name = name;
-		std::unique_lock<std::mutex> lock(_mutex);
-		_condition.wait(lock, [this]() { return _start; });
-		lock.unlock();
-		_functionToExecute();
-	});
+Thread::Thread(const std::string& name, std::function<void()> functToExecute)
+    : _functionToExecute(std::move(functToExecute)), _name(name) 
+{
+    _thread = std::thread(&Thread::_threadEntry, this);
 }
 
 Thread::~Thread() {
-	{
-		std::lock_guard<std::mutex> lock(_mutex);
-		_start = true;
-	}
-	_condition.notify_all();
+    stop();
+    if (_thread.joinable()) {
+        _thread.join();
+    }
+}
 
-	if (_thread.joinable()) {
-		_thread.join();
-	}
+Thread::Thread(Thread&& other) noexcept
+    : _thread(std::move(other._thread)),
+      _functionToExecute(std::move(other._functionToExecute)),
+      _name(std::move(other._name)),
+      _started(other._started.load()),
+      _stopRequested(other._stopRequested.load())
+{}
+
+Thread& Thread::operator=(Thread&& other) noexcept {
+    if (this != &other) {
+        if (_thread.joinable()) {
+            stop();
+            _thread.join();
+        }
+        _thread = std::move(other._thread);
+        _functionToExecute = std::move(other._functionToExecute);
+        _name = std::move(other._name);
+        _started = other._started.load();
+        _stopRequested = other._stopRequested.load();
+    }
+    return *this;
+}
+
+void Thread::_threadEntry() {
+    _threadName = _name;
+    {
+        std::unique_lock<std::mutex> lock(_startMutex);
+        _startCondition.wait(lock, [this]() { return _started.load(); });
+    }
+    if (!_stopRequested.load()) {
+        _functionToExecute();
+    }
 }
 
 void Thread::start() {
-	std::unique_lock<std::mutex> lock(_mutex);
-	if (_start) {
-		throw std::runtime_error("Thread already started");
-	}
-	_start = true;
-	_condition.notify_all();
+    bool expected = false;
+    if (!_started.compare_exchange_strong(expected, true)) {
+        throw std::runtime_error("Thread already started");
+    }
+    _startCondition.notify_one();
 }
 
 void Thread::stop() {
-	std::unique_lock<std::mutex> lock(_mutex);
-	if (!_start) {
-		throw std::runtime_error("Thread not started");
-	}
-	if (_thread.joinable()) {
-		lock.unlock();
-		_thread.join();
-	}
+    _stopRequested.store(true);
+    {
+        std::lock_guard<std::mutex> lock(_startMutex);
+        _started = true;
+    }
+    _startCondition.notify_one();
+    if (_thread.joinable()) {
+        _thread.join();
+    }
 }
 
-const std::string& Thread::getName() {
-	return _name;
+const std::string& Thread::getCurrentThreadName() {
+    return _threadName;
+}
+
+const std::string& Thread::getName() const {
+    return _name;
 }

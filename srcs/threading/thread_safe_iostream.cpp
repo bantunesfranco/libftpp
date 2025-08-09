@@ -6,18 +6,18 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/27 09:46:50 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/27 20:45:36 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/07/30 11:31:26 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "libftpp.hpp"
+#include "core/threading.hpp"
 
 std::mutex ThreadSafeIOStream::_mutex;
 thread_local std::string ThreadSafeIOStream::_prefix = "[Main] ";
 thread_local ThreadSafeIOStream ThreadSafeIOStream::threadSafeCout;
 
 ThreadSafeIOStream::ThreadSafeIOStream() : _buffer() {
-	_setPrefix(Thread::getName());
+	_setPrefix(Thread::getCurrentThreadName());
 }
 
 ThreadSafeIOStream& ThreadSafeIOStream::operator<<(std::ostream& (*manip)(std::ostream&)) {
