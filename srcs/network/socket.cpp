@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/30 11:08:32 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/30 23:23:32 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/17 12:38:56 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,7 +38,7 @@ Socket& Socket::operator=(Socket&& other) {
 }
 
 bool Socket::create() {
-    _fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    _fd = ::socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK, IPPROTO_TCP);
     return _fd != -1;
 }
 
@@ -60,6 +60,10 @@ Socket Socket::accept() {
     sockaddr_in clientAddr{};
     socklen_t len = sizeof(clientAddr);
     int clientSock = ::accept(_fd, reinterpret_cast<sockaddr*>(&clientAddr), &len);
+    if (clientSock < 0) {
+        perror("accept");
+        return Socket(); // Return an invalid socket
+    }
 
     Socket client;
     client._fd = clientSock;
@@ -75,17 +79,25 @@ bool Socket::connect(std::string_view ip, uint16_t port) {
     return ::connect(_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0;
 }
 
+#include <iostream>
 size_t Socket::send(std::string_view data) const {
     return ::send(_fd, data.data(), data.size(), 0);
 }
 
 std::string Socket::receive(size_t size) const {
     std::string buffer(size, '\0');
-    size_t bytes = ::recv(_fd, &buffer[0], size, 0);
-    if (bytes <= 0) return {};
-    buffer.resize(static_cast<size_t>(bytes));
-    return buffer;
+    ssize_t bytes = ::recv(_fd, &buffer[0], size, 0);
+
+    if (bytes > 0) {
+        buffer.resize(bytes);
+        return buffer;
+    }
+
+    if (bytes == 0) return {};
+    if (errno == EAGAIN || errno == EWOULDBLOCK) return "";
+    return {};
 }
+
 
 void Socket::close() {
     if (isValid()) {

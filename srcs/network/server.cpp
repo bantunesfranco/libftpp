@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/28 22:21:29 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/30 23:19:37 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/23 15:44:22 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,7 +15,7 @@
 #include <cstring>
 #include <arpa/inet.h>
 
-Server::Server() : _mutex(), _clients(), _receiveBuffers(), _actions(), _messageQueue() {}
+Server::Server() : _mutex(), _threads(), _clients(), _receiveBuffers(), _actions(), _messageQueue() {}
 
 Server::~Server() {
     std::lock_guard lock(_mutex);
@@ -38,9 +38,11 @@ void Server::start(const size_t& port) {
         throw std::runtime_error("Failed to listen on socket");
     }
 
-    std::thread([this]() {
-        _acceptClients();
-    }).detach();
+    Thread receiver("receiver", [this]() {
+        _receiveFromClients();
+    });
+    _threads.push_back(std::move(receiver));
+    receiver.start();
 }
 
 void Server::defineAction(const Message::Type& messageType,
@@ -50,16 +52,31 @@ void Server::defineAction(const Message::Type& messageType,
 }
 
 void Server::sendTo(const Message& message, long long clientID) {
-    std::lock_guard lock(_mutex);
-    if (auto it = _clients.find(clientID); it != _clients.end()) {
-        std::string serialized = message.serialize();
-        it->second.send(serialized);
+    // std::lock_guard lock(_mutex);
+    for (auto& [id, client] : _clients) {
+        if (id != clientID) continue;
+
+        std::string payload = message.serialize();
+        uint32_t size = htonl(payload.size());
+
+        std::string fullMessage(reinterpret_cast<char*>(&size), sizeof(size));
+        fullMessage += payload;
+
+        client.send(fullMessage);
     }
 }
 
 void Server::sendToArray(const Message& message, const std::vector<long long>& clientIDs) {
-    for (const auto& id : clientIDs) {
-        sendTo(message, id);
+    std::lock_guard lock(_mutex);
+    std::string payload = message.serialize();
+    uint32_t size = htonl(payload.size());
+    
+    std::string fullMessage(reinterpret_cast<char*>(&size), sizeof(size));
+    fullMessage += payload;
+    
+    for (auto& [id, client] : _clients) {
+        if (std::find(clientIDs.begin(), clientIDs.end(), id) != clientIDs.end())
+            client.send(fullMessage);
     }
 }
 
@@ -73,77 +90,111 @@ void Server::sendToAll(const Message& message) {
 void Server::update() {
     std::vector<std::pair<long long, Message>> queueCopy;
 
+    _acceptClients();
+    
     {
         std::lock_guard lock(_mutex);
         queueCopy.swap(_messageQueue);
+        std::cout << "[Server] Processing " << queueCopy.size() << " messages in the queue." << std::endl;
     }
 
     for (auto& [clientID, msg] : queueCopy) {
         auto it = _actions.find(static_cast<Message::Type>(msg.type()));
+        std::cout << "[Server] Processing message of type " << msg.type() << " from client " << clientID << std::endl;
         if (it != _actions.end()) {
             it->second(clientID, msg);
         }
     }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 void Server::_acceptClients() {
-    while (true) {
-        Socket clientSocket = _listeningSocket.accept();
-        if (!clientSocket.isValid()) continue;
+    std::cout << "[Server] Waiting for new client connections..." << std::endl;
+    Socket clientSocket = _listeningSocket.accept();
+    if (!clientSocket.isValid()) return;
+    
+    std::cout << "[Server] New client connected: " << clientSocket.getFd() << std::endl;
+    long long clientID = static_cast<long long>(clientSocket.getFd());
 
-        long long clientID = static_cast<long long>(clientSocket.getFd());
-
-        {
-            std::lock_guard lock(_mutex);
-            _clients[clientID] = std::move(clientSocket);
-        }
-
-        std::thread([this, clientID]() {
-            _receiveFromClient(clientID);
-        }).detach();
+    {
+        std::lock_guard lock(_mutex);
+        _clients[clientID] = std::move(clientSocket);
     }
 }
 
-void Server::_receiveFromClient(long long clientID) {
+void Server::_receiveFromClients() {
     constexpr size_t HEADER_SIZE = 4;
+    constexpr size_t BUFFER_SIZE = 1024;
 
     while (true) {
-        std::string dataChunk;
+        std::vector<std::pair<long long, Message>> newMessages;
 
         {
-            std::lock_guard lock(_mutex);
-            auto it = _clients.find(clientID);
-            if (it == _clients.end()) return;
-            dataChunk = it->second.receive();  // could be partial
+            std::lock_guard<std::mutex> lock(_mutex);
+            for (auto it = _clients.begin(); it != _clients.end(); ) {
+                long long clientID = it->first;
+                Socket& clientSocket = it->second;
+
+                std::string dataChunk = clientSocket.receive(BUFFER_SIZE);
+
+                if (dataChunk.empty()) {
+                    _handleClientDisconnect(clientID);
+                    it = _clients.erase(it);
+                    _receiveBuffers.erase(clientID);
+                    continue;
+                }
+
+                auto& buffer = _receiveBuffers[clientID];
+                buffer += dataChunk;
+
+                while (buffer.size() >= HEADER_SIZE) {
+                    uint32_t msgLen;
+                    std::memcpy(&msgLen, buffer.data(), HEADER_SIZE);
+                    msgLen = ntohl(msgLen);
+
+                    if (msgLen > 1000) {
+                        std::cerr << "[Server] Message too large from client " << clientID << std::endl;
+                        _handleClientDisconnect(clientID);
+                        it = _clients.erase(it);
+                        _receiveBuffers.erase(clientID);
+                        break;
+                    }
+
+                    if (buffer.size() < HEADER_SIZE + msgLen) break;
+
+                    std::string payload = buffer.substr(HEADER_SIZE, msgLen);
+                    buffer.erase(0, HEADER_SIZE + msgLen);
+
+                    try {
+                        Message msg = Message::deserialize(payload);
+                        newMessages.emplace_back(clientID, std::move(msg));
+                    } catch (...) {
+                        std::cerr << "[Server] Failed to deserialize message from client " << clientID << std::endl;
+                        continue;
+                    }
+                }
+
+                ++it;
+            }
         }
 
-        if (dataChunk.empty()) {
-            _handleClientDisconnect(clientID);
-            return;
+        // Add messages to the queue outside of the lock
+        for (auto& pair : newMessages) {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _messageQueue.push_back(std::move(pair));
         }
 
-        std::lock_guard lock(_mutex);
-        auto& buffer = _receiveBuffers[clientID];
-        buffer += dataChunk;
-
-        // Parse all complete messages
-        while (buffer.size() >= HEADER_SIZE) {
-            uint32_t msgLen;
-            std::memcpy(&msgLen, buffer.data(), HEADER_SIZE);
-            msgLen = ntohl(msgLen);
-
-            if (buffer.size() < HEADER_SIZE + msgLen) break; // incomplete
-
-            std::string messagePayload = buffer.substr(HEADER_SIZE, msgLen);
-            buffer.erase(0, HEADER_SIZE + msgLen);
-
-            Message msg = Message::deserialize(messagePayload);
-            _messageQueue.emplace_back(clientID, std::move(msg));
-        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1)); // prevent busy loop
     }
 }
 
 void Server::_handleClientDisconnect(long long clientID) {
     std::lock_guard lock(_mutex);
-    _clients.erase(clientID);
+    
+    auto it = _clients.find(clientID);
+    if (it != _clients.end()) {
+        it->second.close();
+        _clients.erase(clientID);
+    }
 }

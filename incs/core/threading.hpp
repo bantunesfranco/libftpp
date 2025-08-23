@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/25 14:05:10 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/30 12:29:53 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/17 13:43:36 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,33 +29,33 @@
 #include <condition_variable>
 
 class Thread {
-private:
-    std::thread _thread;
-    std::function<void()> _functionToExecute;
-    std::string _name;
+    private:
+        std::thread _thread;
+        std::function<void()> _functionToExecute;
+        std::string _name;
 
-    std::mutex _startMutex;
-    std::condition_variable _startCondition;
-    std::atomic<bool> _started{false};
-    std::atomic<bool> _stopRequested{false};
+        std::mutex _startMutex;
+        std::condition_variable _startCondition;
+        std::atomic<bool> _started{false};
+        std::atomic<bool> _stopRequested{false};
 
-    void _threadEntry();
+        void _threadEntry();
 
-    static thread_local std::string _threadName;
+        static thread_local std::string _threadName;
 
-public:
-    Thread(const std::string& name, std::function<void()> functToExecute);
-    ~Thread();
-    Thread(const Thread&) = delete;
-    Thread& operator=(const Thread&) = delete;
-    Thread(Thread&& other) noexcept;
-    Thread& operator=(Thread&& other) noexcept;
+    public:
+        Thread(const std::string& name, std::function<void()> functToExecute);
+        ~Thread();
+        Thread(const Thread&) = delete;
+        Thread& operator=(const Thread&) = delete;
+        Thread(Thread&& other) noexcept;
+        Thread& operator=(Thread&& other) noexcept;
 
-    void start();
-    void stop();
-    const std::string& getName() const;
+        void start();
+        void stop();
+        const std::string& getName() const;
 
-    static const std::string& getCurrentThreadName();
+        static const std::string& getCurrentThreadName();
 };
 
 #endif

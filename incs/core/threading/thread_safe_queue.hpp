@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/25 14:06:22 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/25 19:00:57 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/16 00:01:55 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,6 +34,7 @@ class ThreadSafeQueue : public std::deque<TType>
 			return *this;
 		}
 
+		bool empty();
 		void push_back(const TType& newElement);
 		void push_front(const TType& newElement);
 		TType pop_back();
@@ -74,6 +75,14 @@ TType ThreadSafeQueue<TType>::pop_front()
 	TType value = std::deque<TType>::front();
 	std::deque<TType>::pop_front();
 	return value;
+}
+
+template <typename TType>
+bool ThreadSafeQueue<TType>::empty()
+{
+	std::lock_guard<std::mutex> lock(_mutex);
+	bool isEmpty = std::deque<TType>::empty();\
+	return isEmpty;
 }
 
 #endif

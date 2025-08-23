@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/31 18:31:24 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/31 18:55:27 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/23 15:44:00 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,13 +14,19 @@
 #include <iostream>
 #include <atomic>
 
-constexpr uint16_t SERVER_PORT = 5555;
 
-int main() {
+int main(int argc, char** argv) {
     Server server;
+    int serverPort;
+
+    if (argc != 2) {
+        std::cerr << "[Server] Usage: " << argv[0] << " <port>\n";
+        return 1;
+    }
 
     try {
-        server.start(SERVER_PORT);
+        serverPort = atoi(argv[1]);
+        server.start(serverPort);
     } catch (const std::exception& e) {
         std::cerr << "[Server] Failed to start: " << e.what() << std::endl;
         return 1;
@@ -42,7 +48,7 @@ int main() {
         server.sendTo(response, clientId);
     });
 
-    std::cout << "[Server] Running on port " << SERVER_PORT << "...\n";
+    std::cout << "[Server] Running on port " << serverPort << "...\n";
 
     // Main server loop
     while (true) {
