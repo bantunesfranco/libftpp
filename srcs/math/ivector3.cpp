@@ -1,22 +1,19 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        ::::::::            */
-/*   libftpp.hpp                                        :+:    :+:            */
+/*   ivector3.cpp                                       :+:    :+:            */
 /*                                                     +:+                    */
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
-/*   Created: 2024/10/26 20:30:25 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/08/23 14:14:47 by bfranco       ########   odam.nl         */
+/*   Created: 2025/08/23 13:12:19 by bfranco       #+#    #+#                 */
+/*   Updated: 2025/08/23 14:38:11 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef LIBFTPP_HPP
-#define LIBFTPP_HPP
+#include "core/math/ivector3.hpp"
 
-#include "core/data_structures.hpp"
-#include "core/design_patterns.hpp"
-#include "core/threading.hpp"
-#include "core/networking.hpp"
-#include "core/mathematics.hpp"
-
-#endif
+/*
+	Not sure why this is required since its a templated struct.
+	All methods require the use of IVector3<TType> which means
+	they need to be place in the .hpp or .tpp file, not the .cpp
+*/
