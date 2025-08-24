@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/25 18:51:49 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/25 20:02:15 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/24 12:45:19 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -90,11 +90,9 @@ void test_threaded_push_pop() {
     Thread t1("t1", producer);
     Thread t2("t2", consumer);
 
-    t1.start();
-    t2.start();
-
-    t1.stop();
-    t2.stop();
+    t1.start(); t2.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    t1.stop(); t2.stop();
 
     try {
         queue.pop_front();

@@ -6,40 +6,41 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/27 21:25:10 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/30 12:26:29 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/24 19:06:49 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef WORKER_POOL_HPP
 #define WORKER_POOL_HPP
 
-// #include <functional>
-// #include <map>
+#include <vector>
+#include <queue>
+#include <functional>
+#include <atomic>
+#include <condition_variable>
+#include "core/threading.hpp"
 
-// #include "core/data_structures/pool.hpp"
-
-// class Thread;
-
-// class WorkerPool {
-// 	private:
-// 		struct FunctionComparator {
-// 			bool operator()(const std::function<void()>& a, const std::function<void()>& b) const {
-// 				return &a < &b;
-// 			}
-// 		};
+class WorkerPool {
+	private:
+		std::vector<std::thread> _workers;
+		std::queue<std::function<void()>> _jobs;
+		std::mutex _mutex;
+		std::condition_variable _cv;
+		std::atomic<bool> _stop{false};
 		
-// 		Pool<Thread> _workers;
-// 		std::map<const std::string&, const std::function<void()>&, FunctionComparator> _tasks;
+		void _workerLoop();
 
-// 		WorkerPool(const WorkerPool& other) = delete;
-// 		WorkerPool& operator=(const WorkerPool& other) = delete;
+	public:
+		struct IJobs {
+			virtual ~IJobs() = default;
+			virtual void execute() = 0;
+		};
 
-// 	public:
-// 		WorkerPool(size_t size = 10);
-// 		~WorkerPool() = default;
-		
-// 		void addJob(const std::string& name, const std::function<void()>& jobToExecute);
-// 		void removeTask(const std::string& name);
-// };
+		WorkerPool(std::size_t numWorkers);
+		~WorkerPool();
+
+		void addJob(const std::function<void()>& jobToExecute);
+		void addJob(std::unique_ptr<IJobs> job);
+};
 
 #endif

@@ -6,12 +6,15 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/08/23 12:56:10 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/08/23 14:58:23 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/23 16:25:30 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef	IVECTOR2_HPP
 #define IVECTOR2_HPP
+
+#include <cmath>
+#include <stdexcept>
 
 template<typename TType>
 struct IVector2

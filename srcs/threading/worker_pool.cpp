@@ -5,39 +5,74 @@
 /*                                                     +:+                    */
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
-/*   Created: 2025/07/28 13:39:44 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/$28 13:39:45 by bfranco       ########   odam.nl         */
+/*   Created: 2025/08/24 14:20:00 by bfranco       #+#    #+#                 */
+/*   Updated: 2025/08/24 19:06:16 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "core/threading.hpp"
+#include "core/threading/worker_pool.hpp"
+#include <iostream>
 
-using TSIO = ThreadSafeIOStream;
+WorkerPool::WorkerPool(std::size_t numWorkers) {
+    for (std::size_t i = 0; i < numWorkers; ++i) {
+        _workers.emplace_back([this]() { _workerLoop(); });
+    }
+}
 
-// WorkerPool::WorkerPool(size_t size): _workers(size), _tasks() {};
+WorkerPool::~WorkerPool() {
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _stop.store(true, std::memory_order_release);
+    }
+    _cv.notify_all();
 
-// void WorkerPool::addJob(const std::string& name, const std::function<void()>& jobToExecute) {
-// 	if (_tasks.find(name) != _tasks.end())
-// 		throw std::runtime_error("Error: Task with name \"" + name + "\" already exists");
+    for (auto& t : _workers) {
+        if (t.joinable()) t.join();
+    }
+}
 
-// 	auto tasks = _tasks;
-// 	auto task = [&, name, tasks, jobToExecute]() {
-// 		while (tasks.find(name) != tasks.end())
-// 			TSIO::threadSafeCout << "Executing " << name << std::endl;
-// 				jobToExecute();
-// 		TSIO::threadSafeCout << "Done" << std::endl;
-// 	};
-	
+void WorkerPool::addJob(std::unique_ptr<IJobs> jobToExecute) {
+    auto jobShared = std::shared_ptr<IJobs>(std::move(jobToExecute));
+    addJob([jobShared]() {
+        try {
+            jobShared->execute();
+        } catch (const std::exception& e) {
+            std::cerr << "Exception in job: " << e.what() << std::endl;
+        }
+    });
+}
 
-// }
+void WorkerPool::addJob(const std::function<void()>& jobToExecute) {
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (_stop.load(std::memory_order_acquire)) {
+            throw std::runtime_error("Cannot add jobs to a stopped WorkerPool");
+        }
+        _jobs.push(jobToExecute);
+    }
+    _cv.notify_one();
+}
 
-// void WorkerPool::removeTask(const std::string& name) {
-// 	for (auto& worker : _workers.getPool())
-// 	{
-// 		if (worker.getName() == name)
-// 		{
-// 			worker.stop()
-// 		}
-// 	}
+void WorkerPool::_workerLoop() {
+    while (true) {
+        std::function<void()> job;
 
-// }
+        {
+            std::unique_lock<std::mutex> lock(_mutex);
+            _cv.wait(lock, [this]() { return _stop.load() || !_jobs.empty(); });
+
+            if (_stop.load() && _jobs.empty()) return;
+
+            job = std::move(_jobs.front());
+            _jobs.pop();
+        }
+
+        try {
+            job();
+        } catch (const std::exception& e) {
+            std::cerr << "WorkerPool caught exception: " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "WorkerPool caught unknown exception" << std::endl;
+        }
+    }
+}

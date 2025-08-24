@@ -6,12 +6,13 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/27 10:01:22 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/27 20:56:28 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/24 12:37:31 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include <mutex>
 #include <stdexcept>
+#include <thread>
 #include "libftpp.hpp"
 
 void assert(bool condition, const std::string& message) {
@@ -51,19 +52,20 @@ int main() {
 
     // Thread-local prefix test (safe capture)
     Thread t1("T1", [&]() {
-        std::lock_guard<std::mutex> lock(captureMutex);
         CoutCapture redirect(capture);
+        std::lock_guard<std::mutex> lock(captureMutex);
         TSIO::threadSafeCout << "Message from T1" << std::endl;
     });
 
     Thread t2("T2", [&]() {
-        std::lock_guard<std::mutex> lock(captureMutex);
         CoutCapture redirect(capture);
+        std::lock_guard<std::mutex> lock(captureMutex);
         TSIO::threadSafeCout << "Message from T2" << std::endl;
     });
 
     t1.start(); t2.start();
-    t1.stop();  t2.stop();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    t1.stop();t2.stop();
 
     assert(capture.str().find("[T1] Message from T1") != std::string::npos,
         "Missing output from T1");
@@ -83,6 +85,7 @@ int main() {
     });
 
     t3.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     t3.stop();
 
     assert(capture.str().find("[Multi] Part1 123 Part2") != std::string::npos,
@@ -103,6 +106,7 @@ int main() {
     });
     
     t4.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     t4.stop();
     
     assert(capture.str().find("[FlushTest] Pending...") != std::string::npos,
