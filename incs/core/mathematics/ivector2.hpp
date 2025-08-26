@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/08/23 12:56:10 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/08/23 16:25:30 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/24 20:06:24 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -62,6 +62,9 @@ IVector2<TType>::IVector2() : x(0), y(0) {}
 
 template<typename TType>
 IVector2<TType>::IVector2(TType x, TType y) : x(x), y(y) {}
+
+template<typename TType>
+IVector2<TType>::~IVector2() {}
 
 template<typename TType>
 IVector2<TType>::IVector2(const IVector2<TType>& other) : x(other.x), y(other.y) {}

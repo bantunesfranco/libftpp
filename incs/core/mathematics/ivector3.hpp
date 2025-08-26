@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/08/23 14:39:50 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/08/23 14:58:30 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/24 20:07:44 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,7 @@ struct IVector3 {
 	IVector3();
 	IVector3(TType x, TType y, TType z);
 	IVector3(const IVector3& other);
-	~IVector3() = default;
+	~IVector3();
 
 	IVector3& operator=(const IVector3& other);
 
@@ -61,6 +61,9 @@ IVector3<TType>::IVector3() : x(0), y(0), z(0) {}
 
 template<typename TType>
 IVector3<TType>::IVector3(TType x, TType y, TType z) : x(x), y(y), z(z) {}
+
+template<typename TType>
+IVector3<TType>::~IVector3() {}
 
 template<typename TType>
 IVector3<TType>::IVector3(const IVector3<TType>& other) : x(other.x), y(other.y), z(other.z) {}
