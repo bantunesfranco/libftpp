@@ -1,23 +1,20 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        ::::::::            */
-/*   libftpp.hpp                                        :+:    :+:            */
+/*   bonus.hpp                                          :+:    :+:            */
 /*                                                     +:+                    */
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
-/*   Created: 2024/10/26 20:30:25 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/08/26 22:10:50 by bfranco       ########   odam.nl         */
+/*   Created: 2025/08/26 22:11:07 by bfranco       #+#    #+#                 */
+/*   Updated: 2025/08/27 13:44:52 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef LIBFTPP_HPP
-#define LIBFTPP_HPP
+#ifndef BONUS_HPP
+#define BONUS_HPP
 
-#include "core/data_structures.hpp"
-#include "core/design_patterns.hpp"
-#include "core/threading.hpp"
-#include "core/networking.hpp"
-#include "core/mathematics.hpp"
-#include "core/bonus.hpp"
+#include "bonus/observable_value.hpp"
+#include "bonus/timer.hpp"
+#include "bonus/chronometer.hpp"
 
 #endif
