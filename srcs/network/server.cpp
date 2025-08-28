@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/28 22:21:29 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/08/23 15:44:22 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/29 01:21:39 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,187 +14,300 @@
 #include "core/threading.hpp"
 #include <cstring>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
-Server::Server() : _mutex(), _threads(), _clients(), _receiveBuffers(), _actions(), _messageQueue() {}
+Server::Server() : _sock(), _isStarted(false) {}
 
-Server::~Server() {
-    std::lock_guard lock(_mutex);
-    for (auto& [_, client] : _clients) {
-        client.close();
-    }
-    _listeningSocket.close();
+Server::~Server() { _stop(); }
+
+void Server::start(const size_t& p_port)
+{
+	if (_isStarted) throw AlreadyStartedException();
+	
+	_sock.create();
+	if (_sock.isValid() == false) throw StartFailedException("Failed to create socket");
+
+	{
+		const int	enable = 1;
+		setsockopt(_sock.getFd(), SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
+		setsockopt(_sock.getFd(), SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int));
+	}
+
+	int flags = fcntl(_sock.getFd(), F_GETFL, 0);
+	if (flags == -1 || fcntl(_sock.getFd(), F_SETFL, flags | O_NONBLOCK) == -1) {
+		_sock.close();
+		throw StartFailedException("Failed to set non-blocking mode");
+	}
+
+	if (_sock.bind("127.0.0.1", p_port) == false) {
+		_sock.close();
+		throw StartFailedException("Failed to bind socket");
+	}
+
+	if (_sock.listen() == false) {
+		_sock.close();
+		throw StartFailedException("Failed to listen on socket");
+	}
+
+	_isStarted = true;
+	_receiver = std::thread(&Server::_receiveMsgs, this);
 }
 
-void Server::start(const size_t& port) {
-    if (!_listeningSocket.create()) {
-        throw std::runtime_error("Failed to create listening socket");
-    }
+void Server::_stop()
+{
+	if (!_isStarted) return ;
 
-    if (!_listeningSocket.bind("127.0.0.1", static_cast<uint16_t>(port))) {
-        throw std::runtime_error("Failed to bind listening socket");
-    }
+	_isStarted = false;
+	if (_receiver.joinable()) _receiver.join();
 
-    if (!_listeningSocket.listen(10)) {
-        throw std::runtime_error("Failed to listen on socket");
-    }
+	for (auto& [clientID, client] : _clients)
+		client.sock.close();
 
-    Thread receiver("receiver", [this]() {
-        _receiveFromClients();
-    });
-    _threads.push_back(std::move(receiver));
-    receiver.start();
+    _clients.clear();
+    _msgsToSend.clear();
+    _msgs.clear();
+    _sock.close();
 }
 
-void Server::defineAction(const Message::Type& messageType,
-                          const std::function<void(long long& clientID, const Message& msg)>& action) {
-    std::lock_guard lock(_mutex);
-    _actions[messageType] = action;
+void Server::defineAction(const Message::Type& messageType, const Action& action)
+{
+	std::lock_guard<std::mutex>	lock(_mtx);
+	_actions[messageType] = action;
 }
 
-void Server::sendTo(const Message& message, long long clientID) {
-    // std::lock_guard lock(_mutex);
-    for (auto& [id, client] : _clients) {
-        if (id != clientID) continue;
+void Server::sendTo(const Message& message, ClientID clientID)
+{
+	if (!_isStarted) throw NotStartedException();
 
-        std::string payload = message.serialize();
-        uint32_t size = htonl(payload.size());
-
-        std::string fullMessage(reinterpret_cast<char*>(&size), sizeof(size));
-        fullMessage += payload;
-
-        client.send(fullMessage);
-    }
+	std::lock_guard<std::mutex>	lock(_mtx);
+	auto it = _msgsToSend.find(clientID);
+	if (it == _msgsToSend.end()) throw UnknownClientException();
+	it->second.push(message);
 }
 
-void Server::sendToArray(const Message& message, const std::vector<long long>& clientIDs) {
-    std::lock_guard lock(_mutex);
-    std::string payload = message.serialize();
-    uint32_t size = htonl(payload.size());
-    
-    std::string fullMessage(reinterpret_cast<char*>(&size), sizeof(size));
-    fullMessage += payload;
-    
-    for (auto& [id, client] : _clients) {
-        if (std::find(clientIDs.begin(), clientIDs.end(), id) != clientIDs.end())
-            client.send(fullMessage);
-    }
+void
+Server::sendToArray(const Message& message, std::vector<ClientID> clientIDs)
+{
+	if (!_isStarted) throw NotStartedException();
+
+	bool	error = false;
+	for (ClientID clientID : clientIDs) {
+		try {
+			sendTo(message, clientID);
+		} catch (const std::exception& e) {
+			error = true;
+		}
+	}
+
+	if (error) throw BatchSendingFailedException();
 }
 
-void Server::sendToAll(const Message& message) {
-    std::lock_guard lock(_mutex);
-    for (const auto& [id, client] : _clients) {
-        client.send(message.serialize());
-    }
+void Server::sendToAll(const Message& message)
+{
+	if (!_isStarted) throw NotStartedException();
+
+	bool	error = false;
+	for (const auto& client : _clients) {
+		try {
+			sendTo(message, client.first);
+		} catch (const std::exception& e) {
+			error = true;
+		}
+	}
+
+	if (error) throw BatchSendingFailedException();
 }
 
-void Server::update() {
-    std::vector<std::pair<long long, Message>> queueCopy;
+void Server::update()
+{
+	if (!_isStarted) throw NotStartedException();
+	if (_shouldEnd) { _stop(); throw NotStartedException(); }
 
-    _acceptClients();
-    
-    {
-        std::lock_guard lock(_mutex);
-        queueCopy.swap(_messageQueue);
-        std::cout << "[Server] Processing " << queueCopy.size() << " messages in the queue." << std::endl;
-    }
+	std::vector<std::pair<ClientID, Message>>	processingList;
+	std::unordered_map<Message::Type, Action>	actionsList;
 
-    for (auto& [clientID, msg] : queueCopy) {
-        auto it = _actions.find(static_cast<Message::Type>(msg.type()));
-        std::cout << "[Server] Processing message of type " << msg.type() << " from client " << clientID << std::endl;
-        if (it != _actions.end()) {
-            it->second(clientID, msg);
+	{
+		std::lock_guard<std::mutex>	lock(_mtx);
+		processingList.swap(_msgs);
+		actionsList = _actions;
+	}
+
+	for (auto& [clientID, msg] : processingList) {
+		auto	it = actionsList.find(msg.type());
+		if (it != actionsList.end() && it->second)
+			it->second(clientID, msg);
+	}
+}
+
+void Server::_acceptConnection()
+{
+    Socket clientSock = _sock.accept();
+    if (!clientSock.isValid()) return;
+
+    int flags = fcntl(clientSock.getFd(), F_GETFL, 0);
+    if (flags != -1) fcntl(clientSock.getFd(), F_SETFL, flags | O_NONBLOCK);
+
+    ClientID newClientID = static_cast<ClientID>(clientSock.getFd());
+    Client newClient;
+    newClient.sock = std::move(clientSock);
+    newClient.state = Client::NOSIZE;
+    newClient.totalBytes = 0;
+
+    std::lock_guard<std::mutex> lock(_mtx);
+    _clients[newClientID] = std::move(newClient);
+    _msgsToSend[newClientID] = std::queue<Message>();
+}
+
+std::map<Server::ClientID, Server::Client>::iterator 
+	Server::_receiveMsg(std::map<ClientID, Client>::iterator it)
+{
+    Client& client = it->second;
+
+    constexpr size_t MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
+    uint32_t rawSize;
+
+    if (client.state == Client::NOSIZE) {
+        client.bytesRead = recv(
+            client.sock.getFd(),
+            reinterpret_cast<char*>(&rawSize) + client.totalBytes,
+            sizeof(rawSize) - client.totalBytes,
+            0
+        );
+
+        if (client.bytesRead <= 0) {
+            client.sock.close();
+            return _clients.erase(it);
         }
+
+        client.totalBytes += client.bytesRead;
+
+        if (client.totalBytes < sizeof(rawSize))
+            return ++it;
+
+        client.size = ntohl(rawSize);
+
+        if (client.size == 0 || client.size > MAX_MESSAGE_SIZE) {
+            client.sock.close();
+            return _clients.erase(it);
+        }
+
+        client.data.resize(client.size, '\0');
+        client.totalBytes = 0;
+        client.state = Client::SIZE;
     }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-}
-
-void Server::_acceptClients() {
-    std::cout << "[Server] Waiting for new client connections..." << std::endl;
-    Socket clientSocket = _listeningSocket.accept();
-    if (!clientSocket.isValid()) return;
     
-    std::cout << "[Server] New client connected: " << clientSocket.getFd() << std::endl;
-    long long clientID = static_cast<long long>(clientSocket.getFd());
+    if (client.state == Client::SIZE) {
+        client.bytesRead = recv(
+            client.sock.getFd(),
+            client.data.data() + client.totalBytes,
+            client.size - client.totalBytes,
+            0
+        );
 
-    {
-        std::lock_guard lock(_mutex);
-        _clients[clientID] = std::move(clientSocket);
+        if (client.bytesRead <= 0) {
+            client.sock.close();
+            return _clients.erase(it);
+        }
+
+        client.totalBytes += client.bytesRead;
+
+        if (client.totalBytes < client.size)
+            return ++it;
+
+        client.state = Client::MESSAGE;
+        client.totalBytes = 0;
     }
+
+    if (client.state == Client::MESSAGE) {
+        client.state = Client::NOSIZE;
+        Message msg(Message::Type::Undefined);
+        try {
+            msg.deserialize(client.data);
+        } catch (const std::exception&) {
+            return ++it;
+        }
+
+        _msgs.emplace_back(it->first, std::move(msg));
+    }
+
+    return ++it;
 }
 
-void Server::_receiveFromClients() {
-    constexpr size_t HEADER_SIZE = 4;
-    constexpr size_t BUFFER_SIZE = 1024;
 
-    while (true) {
-        std::vector<std::pair<long long, Message>> newMessages;
+void Server::_sendMsg(const Message& message, ClientID clientID)
+{
+	if (!_isStarted) throw NotStartedException();
+
+	auto it = _clients.find(clientID);
+	if (it == _clients.end()) throw UnknownClientException();
+
+	std::string	data = message.serialize();
+	size_t		size = data.size();
+
+    const Client& client = it->second;
+    if (client.sock.isValid() == false) throw UnknownClientException();
+    if (client.sock.send(reinterpret_cast<const char*>(&size)) <= 0) throw SendingFailedException();
+	if (client.sock.send(data.c_str()) <= 0) throw SendingFailedException();
+}
+
+void Server::_receiveMsgs()
+{
+    fd_set readfds, writefds;
+    struct timeval tv;
+
+    while (_isStarted) {
+        FD_ZERO(&readfds);
+        FD_ZERO(&writefds);
+        FD_SET(_sock.getFd(), &readfds);
+        int max_fd = _sock.getFd();
 
         {
-            std::lock_guard<std::mutex> lock(_mutex);
-            for (auto it = _clients.begin(); it != _clients.end(); ) {
-                long long clientID = it->first;
-                Socket& clientSocket = it->second;
+            std::lock_guard<std::mutex> lock(_mtx);
+            for (auto& [id, client] : _clients) {
+                FD_SET(client.sock.getFd(), &readfds);
+                FD_SET(client.sock.getFd(), &writefds);
+                if (client.sock.getFd() > max_fd)
+                    max_fd = client.sock.getFd();
+            }
+        }
 
-                std::string dataChunk = clientSocket.receive(BUFFER_SIZE);
+        tv.tv_sec = 0;
+        tv.tv_usec = 100000; // 0.1 sec
 
-                if (dataChunk.empty()) {
-                    _handleClientDisconnect(clientID);
-                    it = _clients.erase(it);
-                    _receiveBuffers.erase(clientID);
-                    continue;
-                }
+        int activity = select(max_fd + 1, &readfds, &writefds, nullptr, &tv);
+        if (activity < 0) {
+            if (errno == EINTR) continue;
+            std::cerr << "[Server] select() failed: " << strerror(errno) << "\n";
+            break;
+        }
 
-                auto& buffer = _receiveBuffers[clientID];
-                buffer += dataChunk;
+        if (FD_ISSET(_sock.getFd(), &readfds))
+            _acceptConnection();
 
-                while (buffer.size() >= HEADER_SIZE) {
-                    uint32_t msgLen;
-                    std::memcpy(&msgLen, buffer.data(), HEADER_SIZE);
-                    msgLen = ntohl(msgLen);
-
-                    if (msgLen > 1000) {
-                        std::cerr << "[Server] Message too large from client " << clientID << std::endl;
-                        _handleClientDisconnect(clientID);
-                        it = _clients.erase(it);
-                        _receiveBuffers.erase(clientID);
-                        break;
-                    }
-
-                    if (buffer.size() < HEADER_SIZE + msgLen) break;
-
-                    std::string payload = buffer.substr(HEADER_SIZE, msgLen);
-                    buffer.erase(0, HEADER_SIZE + msgLen);
-
-                    try {
-                        Message msg = Message::deserialize(payload);
-                        newMessages.emplace_back(clientID, std::move(msg));
-                    } catch (...) {
-                        std::cerr << "[Server] Failed to deserialize message from client " << clientID << std::endl;
-                        continue;
-                    }
-                }
-
+        std::lock_guard<std::mutex> lock(_mtx);
+        for (auto it = _clients.begin(); it != _clients.end();) {
+            Client& client = it->second;
+            if (FD_ISSET(client.sock.getFd(), &readfds)) {
+                it = _receiveMsg(it);
+            } else {
                 ++it;
             }
         }
 
-        // Add messages to the queue outside of the lock
-        for (auto& pair : newMessages) {
-            std::lock_guard<std::mutex> lock(_mutex);
-            _messageQueue.push_back(std::move(pair));
+        for (auto& [clientID, client] : _clients) {
+            if (FD_ISSET(client.sock.getFd(), &writefds)) {
+                auto msgIt = _msgsToSend.find(clientID);
+                if (msgIt != _msgsToSend.end() && !msgIt->second.empty()) {
+                    Message msg = msgIt->second.front();
+                    try {
+                        _sendMsg(msg, clientID);
+                    } catch (const std::exception& e) {
+                        std::cerr << "[Server] Failed to send to client " << clientID << ": " << e.what() << "\n";
+                        client.sock.close();
+                    }
+                    msgIt->second.pop();
+                }
+            }
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1)); // prevent busy loop
-    }
-}
-
-void Server::_handleClientDisconnect(long long clientID) {
-    std::lock_guard lock(_mutex);
-    
-    auto it = _clients.find(clientID);
-    if (it != _clients.end()) {
-        it->second.close();
-        _clients.erase(clientID);
     }
 }

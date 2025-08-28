@@ -6,17 +6,16 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2025/07/30 19:32:59 by bfranco       #+#    #+#                 */
-/*   Updated: 2025/07/31 18:47:10 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/29 00:51:47 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef MESSAGE_HPP
 #define MESSAGE_HPP
 
-#include <string>
-#include <sstream>
-#include <iostream>
-#include <concepts>
+# include "core/data_structures/data_buffer.hpp"
+# include <stdexcept>
+
 
 class Message {
 	public:
@@ -26,43 +25,47 @@ class Message {
 			Disconnect,
 			Chat,
 			Ping,
-			Pong
+			Pong,
+			DM,
+			Join 
 		};
+	
+	private :
+		Type		_msgType;
+		DataBuffer	_data;
 
-	private:
-		Type _type = Type::Undefined;
-		std::stringstream _stream;
+	public :
+		Message(Type type);
 
-	public:
-		Message(int type);
-		~Message() = default;
-		Message(const Message& other);
-		Message& operator=(const Message& other);
+		Type	type();
 
-		template <typename T>
-		friend Message& operator<<(Message& msg, const T& data) {
-			msg._stream << data;
-			return msg;
-		}
+		template <typename TType>
+		friend Message&	operator<<(Message& msg, const TType& obj);
 
-		template <typename T>
-		friend Message& operator>>(Message& msg, T& data) {
-			msg._stream >> data;
-			return msg;
-		}
+		template <typename TType>
+		friend Message&	operator>>(Message& msg, TType& obj);
 
-		int type() const;
-		void setContent(const std::string& msg);
-		const std::string content() const ;
+		std::string	serialize() const;
+		void		deserialize(const std::string& data);
 
-		std::string serialize() const;
-		static Message deserialize(const std::string& raw);
+		class DeserializationFailedException : public std::runtime_error {
+			public :
+				DeserializationFailedException(const std::string& msg) : runtime_error("Message: " + msg + ".") {}
+		};
 };
 
-struct MessageTypeHash {
-    std::size_t operator()(const Message::Type& t) const noexcept {
-        return static_cast<std::size_t>(t);
-    }
-};
+template <typename TType>
+Message& operator<<(Message& msg, const TType& obj)
+{
+	msg._data << obj;
+	return msg;
+}
+
+template <typename TType>
+Message& operator>>(Message& msg, TType& obj)
+{
+	msg._data >> obj;
+	return msg;
+}
 
 #endif

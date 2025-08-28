@@ -6,7 +6,7 @@
 /*   By: bfranco <bfranco@student.codam.nl>           +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2024/10/26 20:30:13 by bfranco       #+#    #+#                 */
-/*   Updated: 2024/10/31 21:05:20 by bfranco       ########   odam.nl         */
+/*   Updated: 2025/08/28 21:07:17 by bfranco       ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,6 +39,10 @@ class DataBuffer
 		DataBuffer &operator<<(const T &data);
 		template<typename T>
 		DataBuffer &operator>>(T &data);
+
+		size_t size() const { return _buffer.size(); }
+		const std::vector<byte>& getData() const { return _buffer; }
+		std::vector<byte>& getData() { return _buffer; }
 };
 
 template<typename T>
